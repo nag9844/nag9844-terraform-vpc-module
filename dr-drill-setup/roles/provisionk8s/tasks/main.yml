@@ -1,0 +1,108 @@
+---
+- name: create ssh key pair
+  openssh_keypair:
+    path: "{{playbook_dir}}/kubekey"
+    size: 2048
+  tags:
+    provision-static
+
+
+- name: initialize {{app_env}} static resource terraform project
+  command: terraform init
+  args:
+    chdir: "./{{app_env}}/static_resources/"
+  tags:
+    provision-static
+
+- name: create {{app_env}} static_resources terraform workspace
+  command: terraform workspace new static
+  ignore_errors: yes
+  args:              
+    chdir: "./{{app_env}}/static_resources/"
+  tags:
+    provision-static
+
+- name: Provision static resources
+  terraform:
+    project_path: "./{{app_env}}/static_resources/"
+    # state: "present" # this cannot be deleted
+    backend_config:
+      bucket: "{{s3_bucket}}"
+      key: "{{key}}"
+      region: "{{region}}"
+    workspace: "static"
+    variables:
+      region: "us-east-1"
+      vpc_name: "kube-vpc"
+      db_instance: "db.t2.medium"
+      db_user: "postgres"
+      db_password: "hackerstop"
+      ssh_key_name: "kube-key"
+      public_key: "{{playbook_dir}}/kubekey.pub"
+      # private_key: "{{playbook_dir}}/kubekey"
+  register: static_data
+  tags:
+    provision-static
+
+# tasks file for roles/provisionk8s
+- name: initialize {{app_env}} kube-cluster terraform project
+  command: terraform init
+  args:
+    chdir: ./{{app_env}}/kube-cluster
+  tags:
+    provision-kube-cluster
+
+- name: create {{app_env}} terraform workspace
+  command: terraform workspace new {{app_env}}
+  ignore_errors: yes
+  args:              
+    chdir: ./{{app_env}}/kube-cluster
+  tags:
+    provision-kube-cluster
+
+- name: Provision kubernetes cluster
+  terraform:
+    project_path: "./{{app_env}}/kube-cluster"
+    state: "{{state}}"
+    backend_config:
+      bucket: "{{s3_bucket}}"
+      key: "{{key}}"
+      region: "{{region}}"
+    workspace: "{{app_env}}"
+    variables: 
+      ansible_groups: "{{app_env}}"
+      ssh_key_name: "kube-key"
+      public_key: "{{playbook_dir}}/kubekey.pub"
+      private_key: "{{playbook_dir}}/kubekey"
+      vpc_id: "{{ static_data.outputs.vpc_id.value }}"
+      kube_subnet: "{{ static_data.outputs.kubeserver_subnet.value }}"
+      master_subnet: "{{ static_data.outputs.master_subnet.value |to_json}}"
+      worker_node_subnet: "{{ static_data.outputs.worker_node_subnet.value |to_json}}"
+  register: cluster_data
+  tags:
+    provision-kube-cluster
+
+- name: add host to inventory
+  add_host:
+    name: "{{ cluster_data.outputs.kubernetes_server.value.name }}"
+    ansible_ssh_host: "{{ cluster_data.outputs.kubernetes_server.value.ip }}"
+    ansible_ssh_user: "{{ cluster_data.outputs.kubernetes_server.value.ansible_ssh_user}}"
+    ansible_ssh_private_key_file: "{{cluster_data.outputs.kubernetes_server.value.private_key_file}}"
+    host_key_checking: no
+    groups: "{{ app_env }}"
+  when: state == "present"
+
+# used to execute selective tasks
+- name: create hosts file
+  template:
+    src: ./hosts.j2
+    dest: ./hosts
+  when: state == "present"
+
+- name: save kubeconfig to file
+  copy: content="{{cluster_data.outputs.config_map_aws_auth.value}}" dest=./kube_auth_file.yml
+  when: state == "present"
+
+- name: save aws cluster auth file
+  copy: content="{{cluster_data.outputs.kubeconfig.value}}" dest=./kubeconfig.yml
+  when: state == "present"

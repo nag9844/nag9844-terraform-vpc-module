@@ -1,0 +1,9 @@
+- name: Launch Bootstrap Server
+  amazon.aws.ec2_instance:
+    name: {{ name }}
+    key_name: {{ key_name }}
+    instance_type: {{ instance_type }}
+    image_id: {{ image_id }}  # Replace with valid AMI
+    region: {{ region }}
+    state: {{ state }}
+    wait: {{ wait }}

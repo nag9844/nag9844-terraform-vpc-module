@@ -1,0 +1,83 @@
+---
+- name: provision kubernetes cluster role
+  hosts: localhost
+  connection: local
+  roles:
+    - provisionk8s
+  tags:
+    terraform
+
+- name: configure ssh config
+  hosts: localhost
+  connection: local
+  roles:
+    - sshConfig
+  tags:
+    ssh
+
+- name: configure k8sctl
+  hosts: web_servers 
+  gather_facts: false
+  roles:
+    - configk8sctl
+  tags:
+    - kubectl
+
+
+- name: create kops cluster
+  hosts: web_servers
+  gather_facts: false
+  roles:
+    - role: kops
+      kops_version: "1.30.3"
+      aws_region: "ap-south-2"
+      node_size: "t3a.2xlarge"
+      master_size: "t3.medium"
+      zones: "ap-south-2a,ap-south-2b,ap-south-2c"
+      master_zones: "ap-south-2a"
+      kops_state_store: "s3://ashv-dr-dlp-state-store"
+      master_count: "1"
+      node_count: "3"
+      topology: "private"
+      elb: "public"
+      vpcid: "vpc-0e173c1948c546efa"
+      provider: aws
+      labels: "owner: Ashv,Project: dr_k8s_cluster"
+      subnet_ids: "subnet-071e132674552043f,subnet-0266d3cf5e13482b1,subnet-05af7e7e1e071f16d"
+      utility_subnets: "subnet-023dc791e813a9a3e,subnet-02d4511b98d6fa1d2,subnet-0808143f8f8fdd9cb"
+      utility_cidrs: "10.10.1.0/24,10.10.2.0/24,10.10.5.0/24"
+      network_cidr: 10.10.0.0/16
+      subnet_cidr: "10.10.3.0/24,10.10.4.0/24,10.10.6.0/24"
+      name: dr.ashvfinance.com
+      security_groups: "sgr-0fe63b8dc13346c2b"
+      node_volume: "40"
+      ssh_key: ./ssh/
+  tags:
+    - cluster
+      
+
+- name: install kube-system
+  hosts: web_servers
+  gather_facts: false
+  roles:
+    - role: kube_charts
+      githubpass: K2bp88tbaAjYxyMeHTyz #TODO: not here
+      dockerpass: Ashv#2024
+      frontend_url: dr-dlp.ashvfinance.com
+      dlp_environment: latest
+      keycloak_host: dr-aa.ashvfinance.com
+      etl_host: dr-etl.ashvfinance.com
+      flowable_url: dr-wf.ashvfinance.com
+      docker_url: docker.ashvfinance.com/admin
+      git_config_url: git@bitbucket.org:tribe3/config-server-dr.git
+      staging_chart_repo: bitbucket.org/tribe3/staging-k8s-charts.git
+      database_host: dr-prod.c0hj5f9mtztf.ap-south-2.rds.amazonaws.com
+      database_username: ashv_dlp
+      database_password: Ashv_DiGital
+      theme: tribe
+  tags:
+    - charts
+
+
+
+

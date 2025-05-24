@@ -1,0 +1,15 @@
+variable "region" {}
+variable "project_name" {}
+variable "instance_ami" {}
+variable "ec2_count" {}
+variable "instance_type" {}
+variable "subnet_id" {}
+variable "key_name" {}
+variable "vpc_id" {}
+variable "vpc_security_group_ids" {}
+variable "associate_public_ip_address" {}
+variable "encrypted" {}
+variable "volume_type" {}
+variable "volume_size" {}
+variable "delete_on_termination" {}
+variable "vpc" {}

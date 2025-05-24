@@ -1,0 +1,50 @@
+# # install aws
+# - name: add pip packages
+#   pip:
+#     name: "{{item}}"
+#     executable: pip3
+#   loop:
+#     - awscli
+#     - psycopg2
+
+# # install kubectl
+# - name: get stable kubectl version
+#   uri:
+#     url: https://storage.googleapis.com/kubernetes-release/release/stable.txt
+#     return_content: yes
+#   register: kubectl_version
+
+# - name: install kubectl in the k8s server
+#   get_url:
+#     url: "https://storage.googleapis.com/kubernetes-release/release/{{kubectl_version.content|replace('\n', '')}}/bin/linux/amd64/kubectl"
+#     dest: /usr/local/bin/kubectl
+#     mode: a+x
+
+# This file should only include tasks for installing AWS CLI and Kubectl
+# Ensure this is located under roles/configk8sctl/tasks/kubectl.yml
+
+# - name: Install required pip packages
+#   pip:
+#     name: "{{ item }}"
+#     executable: pip3
+#   loop:
+#     - awscli
+#     - psycopg2
+
+
+- name: Get stable kubectl version
+  uri:
+    url: https://storage.googleapis.com/kubernetes-release/release/stable.txt
+    return_content: yes
+  register: kubectl_version
+
+- name: Download and install kubectl
+  get_url:
+    url: "https://storage.googleapis.com/kubernetes-release/release/{{ kubectl_version.content | replace('\n', '') }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: '0755'
+
+- name: Verify kubectl installation
+  command: kubectl version --client
+  register: kubectl_check
+  failed_when: "'Client Version' not in kubectl_check.stdout"

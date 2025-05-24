@@ -1,0 +1,70 @@
+export AWS_REGION="ap-south-2"
+export NODE_SIZE="t3.2xlarge"
+export MASTER_SIZE="t3.medium"
+export ZONES="ap-south-2a,ap-south-2b,ap-south-2c"
+export MASTER_ZONES="ap-south-2a"
+export KOPS_STATE_STORE="s3://ashv-dr-dlp-state-store"
+export MASTER_COUNT="1"
+export NODE_COUNT="3"
+export TOPOLOGY="private"
+export ELB="public"
+export VPCID="vpc-069500813e893fe5c"
+export PROVIDER=aws
+export LABELS="owner=Ashv,Project=dr_k8s_cluster"
+export SUBNET_IDS="subnet-0ae3e96ad082f54d5,subnet-02c44d2275d05f452,subnet-012869412e48a9138"
+export UTILITY_SUBNETS="subnet-0ba8398e64b2d67b9,subnet-0343fdff6c876f527,subnet-0db371df901c33f8d"
+export UTILITY_CIDRS="10.10.1.0/24","10.10.2.0/24","10.10.3.0/24"
+export NETWORK_CIDR=10.10.0.0/16
+export SUBNET_CIDR="10.10.4.0/24","10.10.5.0/24","10.10.6.0/24"
+export NAME=dr.ashvfinance.com
+export SECURITY_GROUPS="sg-09604ce3692b4048f"
+export NODE_VOLUME="40"
+
+
+
+
+kops create cluster \
+--cloud=${PROVIDER} \
+--control-plane-count=${MASTER_COUNT} \
+--node-count=${NODE_COUNT} \
+--zones=${ZONES} \
+--networking=calico \
+--network-cidr=${NETWORK_CIDR} \
+--network-id=${VPCID} \
+--node-size=${NODE_SIZE} \
+--control-plane-size=${MASTER_SIZE} \
+--control-plane-zones=${MASTER_ZONES} \
+--cloud-labels=${LABELS} \
+--subnets=${SUBNET_IDS} \
+--utility-subnets=${UTILITY_SUBNETS} \
+--name=${NAME} \
+--associate-public-ip=false \
+--control-plane-security-groups=${SECURITY_GROUPS} \
+--ssh-public-key=~/.ssh/dr-key.pub \
+--state=${KOPS_STATE_STORE} \
+--node-volume-size=${NODE_VOLUME} \
+--control-plane-volume-size=40 \
+--dns=${TOPOLOGY} \
+--topology=${TOPOLOGY} \
+--api-loadbalancer-type=${ELB}
+
+
+kops export kubeconfig dr.ashvfinance.com --state s3://ashv-dr-dlp-state-store --admin=720h
+
+
+maxPrice: "0.08"
+
+
+aws eks update-kubeconfig --region ap-south-2 --name dr-eks-cluster
+
+
+
+aws eks create-cluster \
+  --name dr-eks-cluster \
+  --region ap-south-2 \
+  --role-arn arn:aws:iam::952693859907:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS \
+  --resources-vpc-config subnetIds=subnet-023dc791e813a9a3e,subnet-02d4511b98d6fa1d2,subnet-0808143f8f8fdd9cb,subnet-071e132674552043f,subnet-0266d3cf5e13482b1,subnet-05af7e7e1e071f16d,securityGroupIds=sg-0d98924e0987963b7
+
+
+eksctl create cluster --name dr-prod-cluster --region ap-south-2 --version 1.31 --vpc-private-subnets subnet-071e132674552043f,subnet-0266d3cf5e13482b1,subnet-05af7e7e1e071f16d --without-nodegroup
+

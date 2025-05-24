@@ -1,0 +1,17 @@
+---
+# tasks file for roles/configk8sctl
+# - name: copy pem file to kube-server
+#   copy: src="{{playbook_dir}}/kubekey" dest=/home/ubuntu/.ssh/id_rsa mode='0700'
+
+- name: install apt packages and upgrade
+  import_tasks: apt.yml
+  become: true
+
+- import_tasks: kubectl.yml
+  become: true
+- import_tasks: helm.yml
+  vars:
+    home_folder: /home/ubuntu
+  tags:
+    - helm
+- import_tasks: kube_dirs.yml

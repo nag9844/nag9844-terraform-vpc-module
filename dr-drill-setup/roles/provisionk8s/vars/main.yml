@@ -1,0 +1,7 @@
+---
+# vars file for roles/provisionk8s    state: present
+state: present
+s3_bucket: tribe-tf-state #get it from s3-bucker.yml
+key: terraform.tfstate
+region: 'us-east-1'
+app_env: dev

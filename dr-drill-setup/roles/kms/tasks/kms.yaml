@@ -1,0 +1,10 @@
+- name: Create KMS Key
+  community.aws.kms_key:
+    state: present
+    description: "KMS Key for DR Drill RDS snapshots"
+    region: "ap-south-2"
+  register: kms_key
+
+- name: Save KMS Key ARN
+  set_fact:
+    kms_key_arn: "{{ kms_key.key_metadata.arn }}"

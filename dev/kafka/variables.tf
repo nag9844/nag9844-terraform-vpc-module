@@ -1,0 +1,13 @@
+variable "microservice_name" {}           
+variable "env" {}                                     
+variable "kafka_client_subnets" {}        
+variable "broker_ebs_volume_size" {}      
+variable "broker_instance_type" {}        
+variable "kafka_version" {}             
+variable "number_of_broker_nodes" {}      
+variable "kafka_enhanced_monitoring" {}   
+variable "kafka_logs_retention_period" {} 
+variable "security_group_id" {}           
+variable "public_access" {}               
+variable "region" {}
+variable "team" {}

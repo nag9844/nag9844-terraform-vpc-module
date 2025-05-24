@@ -1,0 +1,36 @@
+- name: Install Kops
+  get_url:
+    url: https://github.com/kubernetes/kops/releases/download/v{{ kops_version }}/kops-linux-amd64
+    dest: /usr/local/bin/kops
+    mode: '0755'
+
+- name: Create Kubernetes Cluster with Kops
+  shell: >
+    kops create cluster
+    --cloud={{ provider }} 
+    --control-plane-count={{ master_count }} 
+    --node-count={{ node_count }} 
+    --zones={{ zones }} 
+    --networking=calico 
+    --network-cidr={{ network_cidr }} 
+    --network-id={{ vpcid }} 
+    --node-size={{ node_size }} 
+    --control-plane-size={{ master_size }} 
+    --control-plane-zones={{ master_zones }} 
+    --cloud-labels={{ labels }} 
+    --subnets={{ subnet_ids }} 
+    --utility-subnets={{ utility_subnets }} 
+    --name={{ name }} 
+    --associate-public-ip=false 
+    --control-plane-security-groups={{ security_groups }} 
+    --ssh-public-key= {{ ssh_key }} 
+    --state={{ kops_state_store }} 
+    --node-volume-size={{ node_volume }} 
+    --control-plane-volume-size=50 
+    --dns={{ topology }} 
+    --topology={{ topology }} 
+    --api-loadbalancer-type={{ elb }}
+    --yes
+
+
+

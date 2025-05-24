@@ -1,0 +1,34 @@
+---
+# configure helm
+- name: Checking the user name
+  shell: /usr/bin/whoami
+  register: username
+- name: download helm file
+  get_url:
+    url: "https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3"
+    dest: /tmp/get_helm.sh
+    owner: "{{ username.stdout }}"
+    group: "{{ username.stdout }}"
+
+- name: update file to execute
+  file:
+    path: /tmp/get_helm.sh
+    mode: '0700'
+
+- name: install helm
+  shell:
+    chdir: /tmp/
+    cmd: ./get_helm.sh
+
+- name: add user to group
+  become: true
+  file:
+    path: "{{item}}"
+    state: directory
+    mode: 'u+rw'
+    owner: "{{ username.stdout }}"
+    group: "{{ username.stdout }}"
+    recurse: yes
+  loop:
+    - "{{home_folder}}/.cache/"
+    - "{{home_folder}}/.config/"

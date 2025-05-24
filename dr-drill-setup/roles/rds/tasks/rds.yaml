@@ -1,0 +1,20 @@
+- name: Copy RDS snapshot to DR region
+  shell: >
+    aws rds copy-db-snapshot
+    --region {{ dr_region }}
+    --source-db-snapshot-identifier {{ source_snapshot_arn }}
+    --target-db-snapshot-identifier {{ target_snapshot_name }}
+    --kms-key-id {{ kms_key_arn }}
+  register: rds_snapshot_copy
+
+- name: Restore RDS Cluster from Snapshot
+  shell: >
+    aws rds restore-db-cluster-from-snapshot
+    --region {{ dr_region }}
+    --db-cluster-identifier {{ rds_cluster_name }}
+    --snapshot-identifier {{ target_snapshot_name }}
+    --engine aurora-mysql
+    --engine-mode provisioned
+    --db-subnet-group-name {{ db_subnet_group }}
+    --kms-key-id {{ kms_key_arn }}
+  register: rds_restore_output

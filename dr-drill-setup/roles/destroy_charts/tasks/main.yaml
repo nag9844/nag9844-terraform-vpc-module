@@ -1,0 +1,53 @@
+---
+- name: read default charts
+  command: helm ls -q
+  register: charts
+  tags:
+    - destroy-default
+- name: delete default the charts
+  command: "helm delete {{item}}"
+  with_items: "{{charts.stdout_lines}}"
+  tags:
+    - destroy-default
+
+- name: read monitoring charts
+  command: helm ls -q -n monitoring
+  register: charts
+  tags:
+    - destroy-monitoring
+- name: delete monitoring the charts
+  command: "helm delete -n monitoring {{item}}"
+  with_items: "{{charts.stdout_lines}}"
+  tags:
+    - destroy-monitoring
+
+- name: read frontend charts
+  command: helm ls -q -n frontend
+  register: charts
+  tags:
+    - destroy-frontend
+- name: delete frontend the charts
+  command: "helm delete -n frontend {{item}}"
+  with_items: "{{charts.stdout_lines}}"
+  tags:
+    - destroy-frontend
+
+- name: read backend charts
+  command: helm ls -q -n backend
+  register: charts
+  tags:
+    - destroy-backend
+- name: delete backend the charts
+  command: "helm delete -n backend {{item}}"
+  with_items: "{{charts.stdout_lines}}"
+  tags:
+    - destroy-backend
+
+- name: delete kafka the service
+  command: "kubectl -n kafka delete -f {{charts_dir}}/kafka/{{item}}"
+  tags:
+    - destroy-kafka
+  loop:
+    - kafka.yaml
+    - zookeeper.yaml
+    - storage.yaml

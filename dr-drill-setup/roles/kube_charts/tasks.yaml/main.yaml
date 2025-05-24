@@ -1,0 +1,266 @@
+---
+# tasks file for roles/kube_system
+
+# - include_tasks: create_database.yml
+#   tags:
+#     [never, database]
+
+# create namespaces 
+- name: Create helm namespace as HELM 3 doesn't create it automatically
+  command: "kubectl create namespace {{item}}"
+  loop:
+    - "monitoring"
+    - "backend"
+    - "frontend"
+    - "kafka"
+    - "redis"
+    - "nginx-ingress"
+  ignore_errors: true
+  # tags:
+  #   ["never", "namespaces"]
+
+- name: create docker registry secret
+  command: "kubectl create secret -n {{item}} docker-registry docker-reg-secret-new --docker-server=docker.ashvfinance.com --docker-username=admin --docker-password={{dockerpass}} --docker-email=madhu@ashvfinance.com"
+  ignore_errors: true
+  loop:
+    - "backend"
+    - "frontend"
+  # tags:
+  #   ["never", "secrets"]
+
+# From git
+- name: Git clone helm charts repo on HEAD
+  git:
+    repo: "https://cholaraja:{{ githubpass | urlencode }}@{{staging_chart_repo}}"
+    dest: "{{charts_dir}}"
+  ignore_errors: true
+
+# - name: create storageclass
+#   command: "kubectl apply -f {{charts_dir}}/kafka/storage.yaml -n kafka"
+#   ignore_errors: true
+
+- name: install kafka-cluster
+  command: "kubectl apply -f {{charts_dir}}/kafka/cluster.yaml -n kafka"
+  ignore_errors: true
+  tags:
+    - kafka
+- name: Wait for cluster chart to install
+  pause:
+    minutes: 2
+  tags:
+    - kafka
+
+# - name: install kafka
+#   command: "kubectl apply -f {{charts_dir}}/kafka/kafka.yaml -n kafka"
+#   ignore_errors: true
+#   tags:
+#     - zookeeper
+# - name: Wait for kafka chart to install
+#   pause:
+#     minutes: 2
+#   tags:
+#     - kafka
+
+# need to add repo as root user
+# TODO: repo is getting added in the root path
+- name: add HELM repo
+  command: "helm repo add stable https://charts.helm.sh/stable"
+  ignore_errors: true
+
+- name: update HELM repo
+  command: "helm repo update"
+  ignore_errors: true
+
+- name: install nginx-ingress chart
+  command: "helm install nginx-ingress stable/nginx-ingress -n nginx-ingress"
+  ignore_errors: true
+  tags:
+    - ingress
+
+# - name: register elb host name
+#   command: kubectl get svc nginx-ingress-controller  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+#   register: elb_url
+#   tags:
+#     - kube-nginx
+
+# - name: copy bash file
+#   template:
+#     src: ../files/bash
+#     dest: "~/.bash_aliases"
+#   notify: source bashfile
+#   tags:
+#     - bash-alias
+
+# - name: copy certs
+#   become: true
+#   template:
+#     src: "{{item}}"
+#     dest: /etc/ssl/private/
+#   with_items:
+#     - ../files/cert.pem
+#     - ../files/key.pem
+#   tags:
+#     - kube-nginx
+
+# - name: Ensure nginx configuration directory exists
+#   become: true
+#   file:
+#     path: /etc/nginx/sites-enabled
+#     state: directory
+#   tags:
+#     - kube-nginx
+
+# - name: generate nginx file
+#   become: true
+#   template:
+#     src: kube.conf.j2
+#     dest: /etc/nginx/sites-enabled/kube
+#   notify: restart nginx
+#   tags:
+#     - kube-nginx
+
+- name: install storage class
+  command: "kubectl apply -f  ~/helm_charts/monitoring/storage.yml"
+  ignore_errors: true
+  tags:
+    - monitor
+
+- name: install monitoring charts
+  command: "helm install -n monitoring {{item}} ~/helm_charts/monitoring/{{item}} "
+  loop:
+  - loki
+  - promtail
+  - prom-stack
+  ignore_errors: true
+  tags:
+    - monitor
+
+- name: install config chart
+  ignore_errors: true
+  command: "helm install -n backend --set ingress.hosts[0]={{frontend_url}},ingress.path=/config,image.tag=latest,image.repository={{docker_url}}/config-server,config.GIT_REPO_URI={{git_config_url}},config.ACTIVE_PROFILE=prod config-server {{charts_dir}}/backend/config-server"
+  tags:
+    - config
+
+- name: install keycloak charts
+  command: "helm install -n backend --set ingress.hosts[0]={{keycloak_host}},image.tag=latest,image.repository={{docker_url}}/{{item.chart_name}},config.ACTIVE_PROFILE=prod,env.keycloakHost={{keycloak_host}} {{item.chart_name}} {{charts_dir}}/backend/{{item.chart_name}}"
+  ignore_errors: true
+  loop:
+    - {"chart_name": "keycloak-helm"}
+  tags:
+    - key-cloak
+
+- name: install etl server charts
+  command: "helm install -n backend --set ingress.hosts[0]={{etl_host}},image.tag=latest,image.repository={{docker_url}}/{{item.chart_name}},config.ACTIVE_PROFILE=prod {{item.chart_name}} {{charts_dir}}/backend/{{item.chart_name}}"
+  ignore_errors: true
+  loop:
+    - {"chart_name": "airflow-helm"}
+  tags:
+    - etl-server
+
+- name: Wait for config chart to install
+  pause:
+    minutes: 1
+  tags:
+    - key-cloak
+    - config
+
+- name: install auth and init charts
+  command: "helm install -n backend --set image.tag=latest,image.repository={{docker_url}}/{{item.chart_name}},config.ACTIVE_PROFILE=prod {{item.chart_name}} {{charts_dir}}/backend/{{item.chart_name}}"
+  ignore_errors: true
+  loop:
+    - {"chart_name": "auth-server"}
+    - {"chart_name": "init-service"}
+  tags:
+    - auth
+    - init
+
+- name: install api-gateway charts
+  command: "helm install -n backend --set ingress.hosts[0]={{frontend_url}},ingress.path=/api,image.tag=latest,image.repository={{docker_url}}/api-gateway,config.ACTIVE_PROFILE=prod api-gateway {{charts_dir}}/backend/api-gateway"
+  ignore_errors: true
+  tags:
+    - "api-gateway"
+
+- name: Wait for config chart to install
+  pause:
+    minutes: 1
+  tags:
+    - auth
+    - init
+
+- name: install flowable charts
+  command: "helm install -n backend --set ingress.hosts[0]={{flowable_url}},image.tag={{dlp_environment}},image.repository={{docker_url}}/{{item.chart_name}},config.ACTIVE_PROFILE=prod,env.IDM_URL=https://{{flowable_url}}/flowable-idm,env.DEPLOYMENT_URL=https://{{flowable_url}}/flowable-task/app-api,env.REDIRECT_URL=https://{{flowable_url}}/flowable-modeler {{item.chart_name}} {{charts_dir}}/backend/{{item.chart_name}}"
+  ignore_errors: true
+  loop:
+    - {"chart_name": "flowable-server"}
+
+  tags:
+    - flowable-server
+    - flowable
+
+- name: Wait for flowable server to install
+  pause:
+    seconds: 10
+  tags:
+    - flowable-server
+    - flowable
+
+- name: install flowable charts
+  command: "helm install -n backend --set ingress.hosts[0]={{flowable_url}},image.tag={{dlp_environment}},image.repository={{docker_url}}/{{item.chart_name}},config.ACTIVE_PROFILE=prod,env.IDM_URL=https://{{flowable_url}}/flowable-idm,env.DEPLOYMENT_URL=https://{{flowable_url}}/flowable-task/app-api,env.REDIRECT_URL=https://{{flowable_url}}/flowable-modeler {{item.chart_name}} {{charts_dir}}/backend/{{item.chart_name}}"
+  ignore_errors: true
+  loop:
+    - {"chart_name": "flowable-idm"}
+  tags:
+    - flowable
+    - flowable-idm
+
+- name: Wait for flowable server to install
+  pause:
+    seconds: 10
+  tags:
+    - flowable
+    - flowable-idm
+
+- name: install flowable charts
+  command: "helm install -n backend --set ingress.hosts[0]={{flowable_url}},image.tag={{dlp_environment}},image.repository={{docker_url}}/{{item.chart_name}},config.ACTIVE_PROFILE=prod,env.IDM_URL=https://{{flowable_url}}/flowable-idm,env.DEPLOYMENT_URL=https://{{flowable_url}}/flowable-task/app-api,env.REDIRECT_URL=https://{{flowable_url}}/flowable-modeler {{item.chart_name}} {{charts_dir}}/backend/{{item.chart_name}}"
+  ignore_errors: true
+  loop:
+    - {"chart_name": "flowable-modeler"}
+    - {"chart_name": "flowable-task"}
+  tags:
+    - flowable
+    - flowable-modeler
+    - flowable-task
+
+- name: read backend the directories
+  find:
+    paths: "{{charts_dir}}/backend"
+    recurse: no
+    file_type: directory
+  register: backend_charts
+  tags:
+    - backend
+
+- name: install backend charts
+  command: "helm install -n backend --set ingress.hosts[0]={{frontend_url}},image.tag={{dlp_environment}},image.repository={{docker_url}}/{{item.path | basename }},config.ACTIVE_PROFILE=prod {{item.path | basename }} {{charts_dir}}/backend/{{item.path | basename}}"
+  with_items:
+    - "{{backend_charts.files}}"
+  ignore_errors: true
+  tags:
+    - backend
+
+- name: read frontend the directories
+  find:
+    paths: "{{charts_dir}}/frontend"
+    recurse: no
+    file_type: directory
+  register: frontend_charts
+  tags:
+    - frontend
+
+- name: install frontend the charts
+  command: "helm install -n frontend --set image.tag={{dlp_environment}},image.repository={{docker_url}}/{{item.path | basename }},ingress.hosts[0]={{frontend_url}},config.API_URL={{frontend_url}},config.MFE_URL={{frontend_url}},config.THEME={{theme}} {{item.path | basename }} {{charts_dir}}/frontend/{{item.path | basename}}"
+  with_items:
+    - "{{frontend_charts.files}}"
+  ignore_errors: true
+  tags:
+    - frontend

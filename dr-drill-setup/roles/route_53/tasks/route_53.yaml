@@ -1,0 +1,4 @@
+- name: Create Route 53 Hosted Zone
+  amazon.aws.route53_zone:
+    zone: "dr.ashvfinance.com"
+    state: present

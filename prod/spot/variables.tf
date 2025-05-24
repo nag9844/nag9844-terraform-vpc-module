@@ -1,0 +1,15 @@
+variable "region" {}
+variable "instance_ami" {}
+variable "spot_price" {}
+variable "instance_type" {}
+variable "subnet_id" {}
+variable "spot_type" {}
+variable "vpc_security_group_ids" {}
+variable "wait_for_fulfillment" {}
+variable "key_name" {}
+variable "associate_public_ip_address" {}
+variable "project_name" {}
+variable "volume_type" {}
+variable "volume_size" {}
+variable "delete_on_termination" {} 
+variable "encrypted" {}
